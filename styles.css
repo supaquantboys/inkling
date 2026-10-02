@@ -34,11 +34,11 @@
   --radius-ctl: 12px;
   --tabbar-h: 60px;
 
-  color-scheme: light dark;
+  color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
+:root[data-theme="dark"] {
+    color-scheme: dark;
     --paper: #0F1722;
     --sheet: #152030;
     --ink: #E3E9F1;
@@ -50,7 +50,6 @@
     --pencil-wash: #1E2E4F;
     --strike: #E38C76;
     --marker: #5F5521;
-  }
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -704,3 +703,10 @@ textarea.entry[readonly] { opacity: 0.6; }
 .voice-player[hidden] { display: none; }
 #voice-status { flex: 1; font-size: 14px; }
 .voice-player button { flex-shrink: 0; }
+
+.voice-choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.dictation { margin: 12px 0 20px; }
+.dictation-status:empty { display: none; }
+.dictation-status { color: var(--ink-2); font-size: var(--fs-sm); }
+.dictation .recording { color: var(--strike); border-color: var(--strike); }
+.dictation textarea { display: block; width: 100%; margin: 8px 0 12px; resize: vertical; }

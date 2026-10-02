@@ -2,6 +2,7 @@
 // AudioContext is unlocked in the original click, before asynchronous model loading.
 window.InklingVoice = (() => {
   let worker, context, source, timer;
+  const preparations = new Map();
   let preloadStatus = '正在預載自然語音…';
   const preloadUpdate = (message) => {
     preloadStatus = message;
@@ -24,6 +25,8 @@ window.InklingVoice = (() => {
     bar().hidden = true;
   }
   function fail() {
+    for (const pending of preparations.values()) { clearTimeout(pending.timer); pending.resolve(false); }
+    preparations.clear();
     stop();
     worker?.terminate(); worker = null;
     status('自然語音載入失敗。請連線後重試，或在設定選擇裝置語音。');
@@ -36,10 +39,20 @@ window.InklingVoice = (() => {
     if (worker) return worker;
     worker = new Worker('voice-worker.js');
     worker.onerror = () => {
-      if (current) fail();
+      if (current || preparations.size) fail();
       else { worker?.terminate(); worker = null; preloadUpdate('語音預載失敗，點擊朗讀時會重試。'); }
     };
     worker.onmessage = ({ data }) => {
+      if (data.type.startsWith('prepare-')) {
+        const pending = preparations.get(data.id);
+        if (!pending) return;
+        clearTimeout(pending.timer);
+        if (data.type === 'prepare-progress') {
+          pending.progress?.(data.completed, data.total);
+          pending.timer = setTimeout(() => { preparations.delete(data.id); pending.resolve(false); }, 180000);
+        } else { preparations.delete(data.id); pending.resolve(data.type === 'prepare-ready'); }
+        return;
+      }
       if (data.type === 'preload-progress') { preloadUpdate(data.message); return; }
       if (data.type === 'preload-ready') { preloadUpdate('自然語音已準備好'); return; }
       if (data.type === 'preload-error') { preloadUpdate('語音預載失敗，點擊朗讀時會重試。'); return; }
@@ -97,6 +110,18 @@ window.InklingVoice = (() => {
     } catch { if (current === id) fail(); }
   }
   window.addEventListener('pagehide', stop);
+  function prepare(texts, settings, progress) {
+    if (settings.voiceEngine === 'device') return Promise.resolve(true);
+    const id = ++serial;
+    return new Promise(resolve => {
+      const pending = { resolve, progress, timer: setTimeout(() => { preparations.delete(id); resolve(false); }, 180000) };
+      preparations.set(id, pending);
+      try {
+        getWorker().postMessage({ type: 'prepare', id, texts: texts.filter(Boolean), voice: settings.voice,
+          speed: ['0.85', '1', '1.15'].includes(String(settings.voiceSpeed)) ? Number(settings.voiceSpeed) : 1 });
+      } catch { clearTimeout(pending.timer); preparations.delete(id); resolve(false); }
+    });
+  }
   function preload() {
     try { getWorker().postMessage({ type: 'preload' }); }
     catch { preloadUpdate('語音預載失敗，點擊朗讀時會重試。'); }
@@ -105,5 +130,5 @@ window.InklingVoice = (() => {
     stop();
     try { getWorker().postMessage({ type: 'clear-cache' }); } catch {}
   }
-  return { speak, stop, preload, clearCache, get preloadStatus() { return preloadStatus; } };
+  return { speak, stop, prepare, preload, clearCache, get preloadStatus() { return preloadStatus; } };
 })();

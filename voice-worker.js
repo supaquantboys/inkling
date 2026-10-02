@@ -43,7 +43,41 @@ function chunks(text) {
   return result;
 }
 
+const voiceId = voice => ['af_heart', 'af_bella', 'af_nicole', 'am_michael', 'am_fenrir', 'am_puck'].includes(voice) ? voice : 'af_heart';
+let inference = Promise.resolve();
+let prepareEpoch = 0;
+function cachedAudio(part, voice, speed) {
+  const task = inference.then(async () => {
+    const cacheKey = VoiceCache.key(part, voice, speed);
+    const cached = await VoiceCache.get(cacheKey);
+    if (cached) return { samples: cached.samples.slice(), sampleRate: cached.sampleRate, cached: true };
+    const tts = await model();
+    const audio = await tts.generate(part, { voice, speed });
+    await VoiceCache.put(cacheKey, audio.audio, audio.sampling_rate);
+    return { samples: audio.audio, sampleRate: audio.sampling_rate, cached: false };
+  });
+  inference = task.catch(() => {});
+  return task;
+}
+async function prepare(data) {
+  const epoch = prepareEpoch;
+  const parts = [...new Set(data.texts.flatMap(chunks))];
+  try {
+    for (let i = 0; i < parts.length; i++) {
+      // Interactive playback takes priority over background preparation.
+      while (activeId && epoch === prepareEpoch) await new Promise(resolve => setTimeout(resolve, 25));
+      if (epoch !== prepareEpoch) { send(data.id, 'prepare-error'); return; }
+      await cachedAudio(parts[i], voiceId(data.voice), data.speed);
+      if (epoch !== prepareEpoch) { send(data.id, 'prepare-error'); return; }
+      send(data.id, 'prepare-progress', { completed: i + 1, total: parts.length });
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+    send(data.id, 'prepare-ready');
+  } catch (error) { send(data.id, 'prepare-error', { message: String(error.message || error) }); }
+}
+
 self.onmessage = ({ data }) => {
+  if (data.type === 'prepare') { prepare(data); return; }
   if (data.type === 'preload') {
     model().then(() => send(0, 'preload-ready')).catch(() => send(0, 'preload-error'));
     return;
@@ -55,7 +89,8 @@ self.onmessage = ({ data }) => {
   activeId = data.type === 'speak' ? data.id : 0;
   if (releaseAudio) { releaseAudio(); releaseAudio = null; }
   if (data.type === 'clear-cache') {
-    queue = queue.then(() => VoiceCache.clear());
+    ++prepareEpoch;
+    queue = queue.then(async () => { await inference; await VoiceCache.clear(); });
     return;
   }
   if (data.type !== 'speak') return;
@@ -63,28 +98,16 @@ self.onmessage = ({ data }) => {
     const { id, text, voice, speed } = data;
     if (id !== activeId) return;
     try {
-      const selectedVoice = voice === 'am_michael' ? voice : 'af_heart';
+      const selectedVoice = voiceId(voice);
       for (const part of chunks(text)) {
         if (id !== activeId) return;
-        const cacheKey = VoiceCache.key(part, selectedVoice, speed);
-        const cached = await VoiceCache.get(cacheKey);
-        if (id !== activeId) return;
-        let samples, sampleRate;
-        if (cached) {
-          samples = cached.samples.slice(); sampleRate = cached.sampleRate;
-        } else {
-          send(id, 'progress', { message: '正在產生自然語音…' });
-          const tts = await model();
-          if (id !== activeId) return;
-          const audio = await tts.generate(part, { voice: selectedVoice, speed });
-          samples = audio.audio; sampleRate = audio.sampling_rate;
-          await VoiceCache.put(cacheKey, samples, sampleRate);
-        }
+        send(id, 'progress', { message: '正在準備語音…' });
+        const { samples, sampleRate, cached } = await cachedAudio(part, selectedVoice, speed);
         if (id !== activeId) return;
         // Backpressure: only generate the next sentence once this one finishes.
         await new Promise((resolve) => {
           releaseAudio = resolve;
-          self.postMessage({ id, type: 'audio', samples, sampleRate, cached: !!cached }, [samples.buffer]);
+          self.postMessage({ id, type: 'audio', samples, sampleRate, cached }, [samples.buffer]);
         });
       }
       if (id === activeId) send(id, 'done');

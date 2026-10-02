@@ -7,7 +7,7 @@ function harness(generate) {
   const messages = [];
   const cache = new Map();
   const context = vm.createContext({
-    importScripts() {},
+    importScripts() {}, setTimeout, clearTimeout,
     VoiceCache: {
       clear: async () => cache.clear(),
       key: (text, voice, speed) => JSON.stringify([text, voice, speed]),
@@ -85,4 +85,39 @@ test('preload shares model and does not interrupt active playback', async () => 
   assert.ok(h.messages.some(m => m.type === 'preload-ready'));
   h.send({type:'consumed',id:1}); await tick();
   assert.ok(h.messages.some(m => m.type === 'done' && m.id === 1));
+});
+
+test('all six selected voices reach the model unchanged', async () => {
+  const generated = [];
+  const h = harness(async (text, options) => { generated.push(options.voice); return { audio: new Float32Array(5), sampling_rate: 24000 }; });
+  const voices = ['af_heart','af_bella','af_nicole','am_michael','am_fenrir','am_puck'];
+  for (let i = 0; i < voices.length; i++) {
+    h.send({type:'speak',id:i+1,text:'Hello.',voice:voices[i],speed:1});
+    await tick(); h.send({type:'consumed',id:i+1}); await tick();
+  }
+  assert.deepEqual(generated, voices);
+});
+test('prepared content plays entirely from cache', async () => {
+  let calls = 0;
+  const h = harness(async () => { calls++; return { audio: new Float32Array(5), sampling_rate: 24000 }; });
+  h.send({type:'prepare',id:50,texts:['Hello. Welcome.','Hello.'],voice:'af_bella',speed:1});
+  for (let i=0;i<30 && !h.messages.some(m=>m.type==='prepare-ready');i++) await new Promise(r=>setTimeout(r,5));
+  assert.ok(h.messages.some(m=>m.type==='prepare-ready'));
+  assert.equal(calls,2);
+  h.send({type:'speak',id:1,text:'Hello.',voice:'af_bella',speed:1}); await tick();
+  assert.equal(h.messages.find(m=>m.type==='audio' && m.id===1).cached,true);
+  assert.equal(calls,2);
+  h.send({type:'consumed',id:1}); await tick();
+});
+
+test('clearing audio cancels unfinished preparation and prevents cache repopulation', async () => {
+  let finish;
+  const h = harness(async () => new Promise(resolve => { finish = resolve; }));
+  h.send({type:'prepare',id:50,texts:['Hello. Welcome.'],voice:'af_heart',speed:1});
+  await tick();
+  h.send({type:'clear-cache'});
+  finish({audio:new Float32Array(5),sampling_rate:24000});
+  await tick();
+  assert.ok(h.messages.some(m=>m.type==='prepare-error'));
+  assert.equal(h.messages.filter(m=>m.type==='prepare-ready').length,0);
 });

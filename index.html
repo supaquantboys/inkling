@@ -5,8 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Inkling 英文日記教練</title>
   <meta name="description" content="每天寫幾句日記，中英混寫都可以。AI 教練幫你改成自然的英文，並整理成複習卡。">
-  <meta name="theme-color" content="#EDF1EC" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#0F1722" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#EDF1EC">
+  <script>
+    try {
+      const theme = JSON.parse(localStorage.getItem('inkling.settings') || '{}').theme || 'auto';
+      document.documentElement.dataset.theme = theme === 'dark' || (theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+    } catch { document.documentElement.dataset.theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; }
+  </script>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
@@ -53,6 +58,7 @@
   <input type="file" id="import-file" accept="application/json,.json" hidden>
 
   <script src="voice.js"></script>
+  <script src="dictation.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
