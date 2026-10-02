@@ -134,3 +134,16 @@ test('cached diary playback does not wait for unfinished background inference', 
   h.send({type:'stop'});
   finish({audio:new Float32Array(5),sampling_rate:24000}); await tick();
 });
+
+test('startup preload warms the chosen voice before reporting ready and runs once', async () => {
+  let complete;
+  const calls = [];
+  const h = harness(async (text, options) => { calls.push(options.voice); return new Promise(resolve => { complete = resolve; }); });
+  h.send({type:'preload',voice:'am_puck'});
+  h.send({type:'preload',voice:'am_puck'});
+  await tick();
+  assert.deepEqual(calls,['am_puck']);
+  assert.equal(h.messages.some(m=>m.type==='preload-ready'),false);
+  complete({audio:new Float32Array(5),sampling_rate:24000}); await tick();
+  assert.ok(h.messages.some(m=>m.type==='preload-ready'));
+});

@@ -5,7 +5,7 @@
    純前端 PWA：資料存在瀏覽器 localStorage，AI 走 Gemini API
    ========================================================= */
 
-const APP_VERSION = '0.3.1';
+const APP_VERSION = '0.3.2';
 
 const KEYS = {
   entries: 'inkling.entries',
@@ -1037,10 +1037,32 @@ function go(view) {
   document.getElementById('view').focus({ preventScroll: true });
 }
 
-function openEntry(id, from) {
+async function openEntry(id, from, prepared = false, voiceSettings = { ...state.settings }) {
+  const entry = id === 'demo' ? DEMO : state.entries.find(e => e.id === id);
+  if (!entry) return;
+  if (!prepared) {
+    if (state.busy) return;
+    const previousView = state.view;
+    state.busy = true;
+    state.view = 'write';
+    render();
+    const ready = await InklingVoice.prepare([entry.result.corrected], voiceSettings);
+    state.busy = false;
+    if (!ready) {
+      state.view = previousView;
+      render();
+      toast('日記準備未完成，請確認連線後重試。');
+      return;
+    }
+  }
   state.current = id;
   state.resultFrom = from;
   go('result');
+  // Supporting audio starts only after the full diary is ready and visible.
+  void InklingVoice.prepare([
+    ...entry.result.vocab.flatMap(v => [v.term, v.example]),
+    ...entry.result.changes.map(c => c.revised),
+  ], voiceSettings);
 }
 
 /* ---------- 動作 ---------- */
@@ -1074,18 +1096,14 @@ async function submit() {
     }
     saveEntries();
     const voiceSettings = { ...state.settings };
-    await InklingVoice.prepare([entry.result.corrected], voiceSettings);
+    const ready = await InklingVoice.prepare([entry.result.corrected], voiceSettings);
+    if (!ready) throw userErr('日記準備未完成，請確認連線再試一次。批改結果已保存在日記本。');
     state.autoAdded = { id: entry.id, n: autoAddCards(entry) };
     state.draft = '';
     save(KEYS.draft, '');
     state.editingId = null;
     state.busy = false;
-    openEntry(entry.id, 'write');
-    // The diary is ready to listen to; prepare supporting content after navigation.
-    void InklingVoice.prepare([
-      ...entry.result.vocab.flatMap(v => [v.term, v.example]),
-      ...entry.result.changes.map(c => c.revised),
-    ], voiceSettings);
+    openEntry(entry.id, 'write', true, voiceSettings);
     return;
   } catch (err) {
     state.writeError = err.userMessage || `批改失敗：${err.message}`;
@@ -1371,4 +1389,3 @@ if ('serviceWorker' in navigator && location.protocol !== 'file:') {
 }
 
 render();
-InklingVoice.preload();

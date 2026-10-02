@@ -18,7 +18,7 @@ async function model() {
               ? `下載語音模型：${Math.round(p.progress)}%` : '正在準備語音模型…',
           };
           send(0, 'preload-progress', message);
-          if (activeId) send(activeId, 'progress', message);
+
         },
       });
     })().catch((error) => { modelPromise = null; throw error; });
@@ -61,6 +61,21 @@ async function cachedAudio(part, voice, speed) {
   inference = task.catch(() => {});
   return task;
 }
+let warmupPromise;
+function warmup(voice) {
+  if (!warmupPromise) {
+    const task = inference.then(async () => {
+      const tts = await model();
+      send(0, 'preload-progress', { message: '正在準備自然語音…' });
+      const selectedVoice = voiceId(voice);
+      const audio = await tts.generate('Hello.', { voice: selectedVoice, speed: 1 });
+      await VoiceCache.put(VoiceCache.key('Hello.', selectedVoice, 1), audio.audio, audio.sampling_rate);
+    });
+    inference = task.catch(() => {});
+    warmupPromise = task.catch(error => { warmupPromise = null; throw error; });
+  }
+  return warmupPromise;
+}
 async function prepare(data) {
   const epoch = prepareEpoch;
   const parts = [...new Set(data.texts.flatMap(chunks))];
@@ -81,7 +96,7 @@ async function prepare(data) {
 self.onmessage = ({ data }) => {
   if (data.type === 'prepare') { prepare(data); return; }
   if (data.type === 'preload') {
-    model().then(() => send(0, 'preload-ready')).catch(() => send(0, 'preload-error'));
+    warmup(data.voice).then(() => send(0, 'preload-ready')).catch(() => send(0, 'preload-error'));
     return;
   }
   if (data.type === 'consumed') {
