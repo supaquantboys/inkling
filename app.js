@@ -5,7 +5,7 @@
    純前端 PWA：資料存在瀏覽器 localStorage，AI 走 Gemini API
    ========================================================= */
 
-const APP_VERSION = '0.2.0';
+const APP_VERSION = '0.2.1';
 
 const KEYS = {
   entries: 'inkling.entries',
@@ -870,6 +870,7 @@ function viewSettings() {
 
   <section class="settings-group" aria-labelledby="h-voice">
     <h2 id="h-voice">英文朗讀</h2>
+    <p id="voice-preload-status" class="sub" role="status">${esc(InklingVoice.preloadStatus)}</p>
     <div class="field">
       <label for="voice-engine">語音方式</label>
       <select id="voice-engine" class="input" data-setting="voiceEngine">
@@ -894,8 +895,8 @@ function viewSettings() {
       </select>
     </div>
     <button class="btn secondary" data-action="preview-voice">${ICON.speaker}試聽聲音</button>
-    <p class="help">自然語音首次使用需下載約 100 MB 的模型與相關檔案，建議使用 Wi-Fi。下載後由這台裝置產生語音，朗讀文字不會上傳；瀏覽器會盡可能保留模型快取。手機首次準備可能較久。</p>
-    <p class="help">聲音與速度會自動儲存，套用到全文、單字與複習卡。裝置語音的音色依系統而定，不提供固定男／女聲。</p>
+    <p class="help">開啟 App 時會自動預載自然語音，首次需下載約 100 MB 的模型與相關檔案，建議使用 Wi-Fi。下載後由這台裝置產生語音，朗讀文字不會上傳；瀏覽器會盡可能保留模型快取。手機首次準備可能較久。</p>
+    <p class="help">聲音與速度會自動儲存，套用到全文、單字與複習卡。相同文字、聲音與語速會重用音訊；音訊快取最多 32 MB，滿了會移除最久未使用的內容。裝置語音的音色依系統而定，不提供固定男／女聲。</p>
   </section>
 
   <section class="settings-group" aria-labelledby="h-level">
@@ -1192,6 +1193,7 @@ document.addEventListener('click', (ev) => {
       break;
     case 'clear':
       if (!confirm('清除所有日記、複習卡和設定？這個動作無法復原，建議先匯出備份。')) return;
+      InklingVoice.clearCache();
       Object.values(KEYS).forEach((k) => { try { localStorage.removeItem(k); } catch (e) { /* 忽略 */ } });
       state.entries = [];
       state.cards = [];
@@ -1272,3 +1274,4 @@ if ('serviceWorker' in navigator && location.protocol !== 'file:') {
 }
 
 render();
+InklingVoice.preload();

@@ -2,6 +2,12 @@
 // AudioContext is unlocked in the original click, before asynchronous model loading.
 window.InklingVoice = (() => {
   let worker, context, source, timer;
+  let preloadStatus = '正在預載自然語音…';
+  const preloadUpdate = (message) => {
+    preloadStatus = message;
+    const el = document.getElementById('voice-preload-status');
+    if (el) el.textContent = message;
+  };
   let serial = 0, current = 0, currentText = '';
   const bar = () => document.getElementById('voice-player');
   const status = (message) => {
@@ -29,9 +35,15 @@ window.InklingVoice = (() => {
   function getWorker() {
     if (worker) return worker;
     worker = new Worker('voice-worker.js');
-    worker.onerror = fail;
+    worker.onerror = () => {
+      if (current) fail();
+      else { worker?.terminate(); worker = null; preloadUpdate('語音預載失敗，點擊朗讀時會重試。'); }
+    };
     worker.onmessage = ({ data }) => {
-      if (data.id !== current) return;
+      if (data.type === 'preload-progress') { preloadUpdate(data.message); return; }
+      if (data.type === 'preload-ready') { preloadUpdate('自然語音已準備好'); return; }
+      if (data.type === 'preload-error') { preloadUpdate('語音預載失敗，點擊朗讀時會重試。'); return; }
+      if (!current || data.id !== current) return;
       watchdog();
       if (data.type === 'progress') status(data.message);
       if (data.type === 'error') fail();
@@ -49,7 +61,7 @@ window.InklingVoice = (() => {
             if (current === id) worker?.postMessage({ type: 'consumed', id });
           };
           source.start();
-          status('正在朗讀…');
+          status(data.cached ? '正在播放已快取的語音…' : '正在朗讀…');
         } catch { fail(); }
       }
     };
@@ -85,5 +97,13 @@ window.InklingVoice = (() => {
     } catch { if (current === id) fail(); }
   }
   window.addEventListener('pagehide', stop);
-  return { speak, stop };
+  function preload() {
+    try { getWorker().postMessage({ type: 'preload' }); }
+    catch { preloadUpdate('語音預載失敗，點擊朗讀時會重試。'); }
+  }
+  function clearCache() {
+    stop();
+    try { getWorker().postMessage({ type: 'clear-cache' }); } catch {}
+  }
+  return { speak, stop, preload, clearCache, get preloadStatus() { return preloadStatus; } };
 })();

@@ -5,7 +5,17 @@ const fs = require('node:fs');
 const code = fs.readFileSync(require('node:path').join(__dirname, '../voice-worker.js'), 'utf8');
 function harness(generate) {
   const messages = [];
-  const context = vm.createContext({ self: { postMessage: m => messages.push(m) } });
+  const cache = new Map();
+  const context = vm.createContext({
+    importScripts() {},
+    VoiceCache: {
+      clear: async () => cache.clear(),
+      key: (text, voice, speed) => JSON.stringify([text, voice, speed]),
+      get: async key => cache.get(key),
+      put: async (key, samples, sampleRate) => cache.set(key, { samples: samples.slice(), sampleRate }),
+    },
+    self: { postMessage: m => messages.push(m) },
+  });
   vm.runInContext(code, context);
   context.tts = { generate };
   vm.runInContext('modelPromise = Promise.resolve(tts)', context);
@@ -47,4 +57,32 @@ test('playback backpressure, stop and subsequent request do not deadlock', async
   h.send({type:'consumed',id:2});
   await tick();
   assert.equal(h.messages.filter(m => m.type === 'done' && m.id === 2).length,1);
+});
+
+test('same text, voice and speed reuse audio; changing voice or speed generates anew', async () => {
+  let calls = 0;
+  const h = harness(async () => { calls++; return { audio: new Float32Array([0.1, 0.2]), sampling_rate: 24000 }; });
+  const play = async (id, voice, speed) => {
+    h.send({type:'speak',id,text:'Hello.',voice,speed});
+    await tick();
+    const audio = h.messages.find(m => m.type === 'audio' && m.id === id);
+    assert.ok(audio);
+    h.send({type:'consumed',id}); await tick();
+    return audio;
+  };
+  assert.equal((await play(1,'af_heart',1)).cached,false);
+  assert.equal((await play(2,'af_heart',1)).cached,true);
+  assert.equal(calls,1);
+  await play(3,'am_michael',1);
+  await play(4,'af_heart',0.85);
+  assert.equal(calls,3);
+});
+test('preload shares model and does not interrupt active playback', async () => {
+  const h = harness(async () => ({audio:new Float32Array(5),sampling_rate:24000}));
+  h.send({type:'speak',id:1,text:'Hello.',voice:'af_heart',speed:1});
+  await tick();
+  h.send({type:'preload'}); await tick();
+  assert.ok(h.messages.some(m => m.type === 'preload-ready'));
+  h.send({type:'consumed',id:1}); await tick();
+  assert.ok(h.messages.some(m => m.type === 'done' && m.id === 1));
 });
