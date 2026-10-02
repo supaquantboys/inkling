@@ -5,7 +5,7 @@
    純前端 PWA：資料存在瀏覽器 localStorage，AI 走 Gemini API
    ========================================================= */
 
-const APP_VERSION = '0.3.3';
+const APP_VERSION = '0.3.4';
 
 const KEYS = {
   entries: 'inkling.entries',
@@ -959,7 +959,8 @@ function viewSettings() {
         ${[['0.5', '初學慢速 · 0.5×'], ['0.85', '慢速 · 0.85×'], ['1', '正常 · 1×'], ['1.15', '稍快 · 1.15×']].map(([value, label]) => `<option value="${value}" ${String(s.voiceSpeed) === value ? 'selected' : ''}>${label}</option>`).join('')}
       </select>
     </div>
-    <button class="btn secondary" data-action="preview-voice">${ICON.speaker}試聽聲音</button>
+    <button class="btn secondary" data-action="preview-voice" ${InklingVoice.previewState(s) !== 'ready' ? 'disabled aria-busy="true"' : ''}>${ICON.speaker}試聽聲音</button>
+    <p id="voice-preview-status" class="help" role="status">${InklingVoice.previewState(s) === 'ready' ? '試聽已準備好' : '正在準備試聽…'}</p>
     <p class="help">開啟 App 時會自動預載自然語音，首次需下載約 100 MB 的模型與相關檔案，建議使用 Wi-Fi。下載後由這台裝置產生語音，朗讀文字不會上傳；瀏覽器會盡可能保留模型快取。手機首次準備可能較久。</p>
     <p class="help">聲音與速度會自動儲存，套用到全文、單字與複習卡。相同文字、聲音與語速會重用音訊；音訊快取最多 32 MB，滿了會移除最久未使用的內容。裝置語音的音色依系統而定，不提供固定男／女聲。</p>
   </section>
@@ -1010,6 +1011,29 @@ function viewSettings() {
   <p class="version">Inkling ${APP_VERSION}</p>`;
 }
 
+let previewChoiceEpoch = 0;
+async function preloadPreviewChoices() {
+  const epoch = ++previewChoiceEpoch, settings = { ...state.settings };
+  if (settings.voiceEngine === 'device') return;
+  if (!await InklingVoice.preload(settings) || epoch !== previewChoiceEpoch) return;
+  const voices = [settings.voice, ...VOICES.map(v => v.id).filter(id => id !== settings.voice)];
+  for (const voice of voices) {
+    if (epoch !== previewChoiceEpoch) return;
+    if (!await InklingVoice.preparePreview({ ...settings, voice })) return;
+  }
+}
+function updatePreviewButton() {
+  const button = document.querySelector('[data-action="preview-voice"]');
+  if (!button) return;
+  const phase = InklingVoice.previewState(state.settings);
+  button.disabled = phase !== 'ready';
+  button.setAttribute('aria-busy', String(phase === 'loading'));
+  const status = document.getElementById('voice-preview-status');
+  if (status) status.textContent = phase === 'ready' ? '試聽已準備好' : phase === 'failed' ? '試聽暫時無法使用，請確認連線後再試。' : '正在準備試聽…';
+}
+document.addEventListener('voicepreviewchange', updatePreviewButton);
+window.addEventListener('online', () => { void preloadPreviewChoices(); });
+
 /* ---------- 渲染與導覽 ---------- */
 
 const VIEWS = { write: viewWrite, result: viewResult, review: viewReview, journal: viewJournal, settings: viewSettings };
@@ -1017,6 +1041,10 @@ const VIEWS = { write: viewWrite, result: viewResult, review: viewReview, journa
 function render() {
   const main = document.getElementById('view');
   main.innerHTML = (VIEWS[state.view] || viewWrite)();
+  if (state.view === 'settings') {
+    void InklingVoice.preparePreview(state.settings);
+    updatePreviewButton();
+  }
   const tabFor = state.view === 'result' ? state.resultFrom : state.view;
   document.querySelectorAll('.tab').forEach((t) => {
     if (t.dataset.tab === tabFor) t.setAttribute('aria-current', 'page');
@@ -1238,7 +1266,7 @@ document.addEventListener('click', (ev) => {
       InklingVoice.stop();
       break;
     case 'preview-voice':
-      speak('Today was a lovely day. I took a short walk and learned something new.');
+      if (InklingVoice.previewState(state.settings) === 'ready') speak(InklingVoice.previewText);
       break;
     case 'speak':
       speak(el.dataset.text);
@@ -1358,7 +1386,10 @@ document.addEventListener('change', (ev) => {
   if (!key) return;
   state.settings[key] = el.type === 'radio' ? el.value : el.value.trim();
   if (key === 'model' && !state.settings.model) state.settings.model = DEFAULT_SETTINGS.model;
-  if (['voice', 'voiceEngine', 'voiceSpeed'].includes(key)) InklingVoice.stop();
+  if (['voice', 'voiceEngine', 'voiceSpeed'].includes(key)) {
+    InklingVoice.stop();
+    void preloadPreviewChoices();
+  }
   saveSettings();
   if (key === 'theme') applyTheme();
   toast('已儲存');
@@ -1389,3 +1420,4 @@ if ('serviceWorker' in navigator && location.protocol !== 'file:') {
 }
 
 render();
+void preloadPreviewChoices();

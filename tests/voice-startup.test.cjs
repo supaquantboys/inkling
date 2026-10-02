@@ -14,10 +14,10 @@ function harness() {
   }
   class AudioContext { async resume() {} }
   const context = vm.createContext({
-    Worker, AudioContext, console,
+    Worker, AudioContext, console, Event,
     setTimeout(fn) { const id=++timerId; timers.set(id,fn); return id; }, clearTimeout(id) { timers.delete(id); },
     localStorage: {getItem:()=>JSON.stringify({voice:'am_puck'})},
-    document: {getElementById:id=>id==='voice-player'?bar:id==='voice-status'?label:null},
+    document: {dispatchEvent(){}, getElementById:id=>id==='voice-player'?bar:id==='voice-status'?label:null},
     addEventListener(name, fn) { handlers[name]=fn; },
     speechSynthesis: {cancel(){}},
   });
@@ -59,4 +59,19 @@ test('failed preload retries with same worker when connection returns', async ()
   const requests=h.workers[0].sent.filter(m=>m.type==='preload');
   assert.equal(requests.length,2);
   assert.equal(requests[1].voice,'am_puck');
+});
+
+test('half-speed preview is prepared once, gated until ready and distinct from normal speed', async () => {
+  const h=harness(), settings={voice:'af_bella',voiceSpeed:'0.5'};
+  const first=h.voice.preparePreview(settings), second=h.voice.preparePreview(settings);
+  assert.equal(first,second); assert.equal(h.voice.previewState(settings),'loading');
+  const requests=h.workers[0].sent.filter(m=>m.type==='prepare');
+  assert.equal(requests.length,1); assert.equal(requests[0].speed,0.5);
+  assert.equal(requests[0].texts[0],h.voice.previewText);
+  h.workers[0].onmessage({data:{type:'prepare-ready',id:requests[0].id}});
+  assert.equal(await first,true); assert.equal(h.voice.previewState(settings),'ready');
+  assert.equal(h.voice.previewState({voice:'af_bella',voiceSpeed:'1'}),'idle');
+  await h.voice.speak(h.voice.previewText,settings);
+  assert.equal(h.workers[0].sent.find(m=>m.type==='speak').speed,0.5);
+  h.voice.clearCache(); assert.equal(h.voice.previewState(settings),'idle');
 });

@@ -3,6 +3,9 @@
 window.InklingVoice = (() => {
   let worker, context, source, timer;
   const preparations = new Map();
+  const previewText = 'Today was a lovely day. I took a short walk and learned something new.';
+  const previews = new Map();
+  const previewKey = settings => JSON.stringify([settings.voice || 'af_heart', String(settings.voiceSpeed || '1')]);
   let preloadStatus = '正在預載自然語音…';
   let preloadPhase = 'idle', preloadPromise, finishPreload, preloadVoice;
   const touchPreparation = (id, pending) => {
@@ -138,6 +141,25 @@ window.InklingVoice = (() => {
       } catch { clearTimeout(pending.timer); preparations.delete(id); resolve(false); }
     });
   }
+  function previewState(settings) {
+    return settings.voiceEngine === 'device' ? 'ready' : previews.get(previewKey(settings))?.state || 'idle';
+  }
+  function preparePreview(settings) {
+    if (settings.voiceEngine === 'device') return Promise.resolve(true);
+    const key = previewKey(settings), existing = previews.get(key);
+    if (existing?.state === 'ready') return Promise.resolve(true);
+    if (existing?.state === 'loading') return existing.promise;
+    const entry = { state: 'loading' };
+    previews.set(key, entry);
+    entry.promise = prepare([previewText], { ...settings }).then(ready => {
+      if (previews.get(key) === entry) {
+        entry.state = ready ? 'ready' : 'failed';
+        document.dispatchEvent(new Event('voicepreviewchange'));
+      }
+      return ready;
+    });
+    return entry.promise;
+  }
   function preload(settings = {}) {
     if (settings?.voice) preloadVoice = settings.voice;
     if (preloadPromise) return preloadPromise;
@@ -152,10 +174,11 @@ window.InklingVoice = (() => {
     return promise;
   }
   function clearCache() {
+    previews.clear();
     stop();
     try { getWorker().postMessage({ type: 'clear-cache' }); } catch {}
   }
-  return { speak, stop, prepare, preload, clearCache, get preloadStatus() { return preloadStatus; }, get ready() { return preloadPhase === 'ready'; } };
+  return { speak, stop, prepare, preload, clearCache, previewText, previewState, preparePreview, get preloadStatus() { return preloadStatus; }, get ready() { return preloadPhase === 'ready'; } };
 })();
 // Start before app rendering and AI work; use the saved voice for warmup.
 try { InklingVoice.preload(JSON.parse(localStorage.getItem('inkling.settings') || '{}')); }
