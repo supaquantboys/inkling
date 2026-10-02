@@ -698,3 +698,9 @@ textarea.entry[readonly] { opacity: 0.6; }
   .app { padding-top: 48px; }
   .tabbar { grid-template-columns: repeat(4, 120px); justify-content: center; }
 }
+
+/* Persistent playback feedback across tabs. */
+.voice-player { position: fixed; left: 50%; bottom: calc(82px + env(safe-area-inset-bottom)); transform: translateX(-50%); width: min(92%, 540px); z-index: 50; display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 16px; background: var(--paper, #fff); color: var(--ink, #243248); border: 1px solid var(--rule, #cbd5ce); box-shadow: 0 4px 24px #0002; }
+.voice-player[hidden] { display: none; }
+#voice-status { flex: 1; font-size: 14px; }
+.voice-player button { flex-shrink: 0; }

@@ -1,11 +1,13 @@
 /* Inkling service worker：離線開啟 app 殼層
    改了任何檔案要上線時，把 VERSION 加一，使用者下次開啟就會拿到新版 */
-const VERSION = 'inkling-v0.1.0';
+const VERSION = 'inkling-v0.2.0';
 const SHELL = [
   './',
   './index.html',
   './styles.css',
   './app.js',
+  './voice.js',
+  './voice-worker.js',
   './manifest.webmanifest',
   './icons/icon.svg',
   './icons/icon-192.png',
@@ -21,7 +23,7 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== VERSION).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k.startsWith('inkling-') && k !== VERSION && k !== VERSION + '-fonts').map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });

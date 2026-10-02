@@ -44,9 +44,15 @@
     </button>
   </nav>
 
+  <aside id="voice-player" class="voice-player" aria-label="語音播放器" hidden>
+    <span id="voice-status" role="status" aria-live="polite"></span>
+    <button class="btn small" data-action="stop-voice">停止</button>
+  </aside>
+
   <div id="toast" role="status" aria-live="polite"></div>
   <input type="file" id="import-file" accept="application/json,.json" hidden>
 
+  <script src="voice.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

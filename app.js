@@ -5,7 +5,7 @@
    純前端 PWA：資料存在瀏覽器 localStorage，AI 走 Gemini API
    ========================================================= */
 
-const APP_VERSION = '0.1.0';
+const APP_VERSION = '0.2.0';
 
 const KEYS = {
   entries: 'inkling.entries',
@@ -19,6 +19,9 @@ const DEFAULT_SETTINGS = {
   model: 'gemini-3.5-flash-lite',
   level: 'B1',
   style: 'natural',
+  voiceEngine: 'kokoro',
+  voice: 'af_heart',
+  voiceSpeed: '1',
 };
 
 const MODEL_SUGGESTIONS = ['gemini-3.5-flash-lite', 'gemini-3.6-flash', 'gemini-flash-latest'];
@@ -865,6 +868,36 @@ function viewSettings() {
     <p class="privacy">金鑰只存在這台裝置的瀏覽器裡。日記內容會傳給 Google Gemini 批改；使用免費額度時，Google 可能會用內容改善模型，正式上架前建議改成付費方案或自建後端。</p>
   </section>
 
+  <section class="settings-group" aria-labelledby="h-voice">
+    <h2 id="h-voice">英文朗讀</h2>
+    <div class="field">
+      <label for="voice-engine">語音方式</label>
+      <select id="voice-engine" class="input" data-setting="voiceEngine">
+        <option value="kokoro" ${s.voiceEngine !== 'device' ? 'selected' : ''}>自然語音 · Kokoro</option>
+        <option value="device" ${s.voiceEngine === 'device' ? 'selected' : ''}>裝置語音 · 輕量備用</option>
+      </select>
+    </div>
+    <div class="choices" role="radiogroup" aria-label="自然語音聲音">
+      <label class="choice">
+        <input type="radio" name="voice" value="af_heart" data-setting="voice" ${s.voice !== 'am_michael' ? 'checked' : ''} ${s.voiceEngine === 'device' ? 'disabled' : ''}>
+        <span><strong>女聲 · Heart</strong><span>溫暖自然的美式英文</span></span>
+      </label>
+      <label class="choice">
+        <input type="radio" name="voice" value="am_michael" data-setting="voice" ${s.voice === 'am_michael' ? 'checked' : ''} ${s.voiceEngine === 'device' ? 'disabled' : ''}>
+        <span><strong>男聲 · Michael</strong><span>沉穩清晰的美式英文</span></span>
+      </label>
+    </div>
+    <div class="field">
+      <label for="voice-speed">朗讀速度</label>
+      <select id="voice-speed" class="input" data-setting="voiceSpeed">
+        ${[['0.85', '慢速 · 0.85×'], ['1', '正常 · 1×'], ['1.15', '稍快 · 1.15×']].map(([value, label]) => `<option value="${value}" ${String(s.voiceSpeed) === value ? 'selected' : ''}>${label}</option>`).join('')}
+      </select>
+    </div>
+    <button class="btn secondary" data-action="preview-voice">${ICON.speaker}試聽聲音</button>
+    <p class="help">自然語音首次使用需下載約 100 MB 的模型與相關檔案，建議使用 Wi-Fi。下載後由這台裝置產生語音，朗讀文字不會上傳；瀏覽器會盡可能保留模型快取。手機首次準備可能較久。</p>
+    <p class="help">聲音與速度會自動儲存，套用到全文、單字與複習卡。裝置語音的音色依系統而定，不提供固定男／女聲。</p>
+  </section>
+
   <section class="settings-group" aria-labelledby="h-level">
     <h2 id="h-level">英文程度</h2>
     <div class="choices" role="radiogroup" aria-labelledby="h-level">
@@ -998,21 +1031,8 @@ function toggleCard(kind, i) {
   window.scrollTo(0, y);
 }
 
-let speaking = false;
 function speak(text) {
-  if (!('speechSynthesis' in window)) { toast('這個瀏覽器不支援朗讀'); return; }
-  const synth = window.speechSynthesis;
-  if (speaking) { synth.cancel(); speaking = false; return; }
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang = 'en-US';
-  u.rate = 0.92;
-  const voice = synth.getVoices().find((v) => v.lang === 'en-US' && /natural|premium|enhanced|samantha|google/i.test(v.name))
-    || synth.getVoices().find((v) => v.lang && v.lang.startsWith('en'));
-  if (voice) u.voice = voice;
-  u.onend = () => { speaking = false; };
-  u.onerror = () => { speaking = false; };
-  speaking = true;
-  synth.speak(u);
+  return InklingVoice.speak(text, state.settings);
 }
 
 function exportData() {
@@ -1101,6 +1121,12 @@ document.addEventListener('click', (ev) => {
     }
     case 'toggle-card':
       toggleCard(el.dataset.kind, Number(el.dataset.i));
+      break;
+    case 'stop-voice':
+      InklingVoice.stop();
+      break;
+    case 'preview-voice':
+      speak('Today was a lovely day. I took a short walk and learned something new.');
       break;
     case 'speak':
       speak(el.dataset.text);
@@ -1216,6 +1242,7 @@ document.addEventListener('change', (ev) => {
   if (!key) return;
   state.settings[key] = el.type === 'radio' ? el.value : el.value.trim();
   if (key === 'model' && !state.settings.model) state.settings.model = DEFAULT_SETTINGS.model;
+  if (['voice', 'voiceEngine', 'voiceSpeed'].includes(key)) InklingVoice.stop();
   saveSettings();
   toast('已儲存');
   if (key === 'apiKey' || key === 'model') return;
