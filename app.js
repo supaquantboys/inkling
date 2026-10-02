@@ -5,7 +5,7 @@
    純前端 PWA：資料存在瀏覽器 localStorage，AI 走 Gemini API
    ========================================================= */
 
-const APP_VERSION = '0.3.2';
+const APP_VERSION = '0.3.3';
 
 const KEYS = {
   entries: 'inkling.entries',
@@ -956,7 +956,7 @@ function viewSettings() {
     <div class="field">
       <label for="voice-speed">朗讀速度</label>
       <select id="voice-speed" class="input" data-setting="voiceSpeed">
-        ${[['0.85', '慢速 · 0.85×'], ['1', '正常 · 1×'], ['1.15', '稍快 · 1.15×']].map(([value, label]) => `<option value="${value}" ${String(s.voiceSpeed) === value ? 'selected' : ''}>${label}</option>`).join('')}
+        ${[['0.5', '初學慢速 · 0.5×'], ['0.85', '慢速 · 0.85×'], ['1', '正常 · 1×'], ['1.15', '稍快 · 1.15×']].map(([value, label]) => `<option value="${value}" ${String(s.voiceSpeed) === value ? 'selected' : ''}>${label}</option>`).join('')}
       </select>
     </div>
     <button class="btn secondary" data-action="preview-voice">${ICON.speaker}試聽聲音</button>

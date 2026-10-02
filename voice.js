@@ -104,7 +104,7 @@ window.InklingVoice = (() => {
     if (same) return;
     const id = ++serial;
     current = id; currentText = text;
-    const speed = ['0.85', '1', '1.15'].includes(String(settings.voiceSpeed)) ? Number(settings.voiceSpeed) : 1;
+    const speed = ['0.5', '0.85', '1', '1.15'].includes(String(settings.voiceSpeed)) ? Number(settings.voiceSpeed) : 1;
     if (settings.voiceEngine === 'device') {
       if (!window.speechSynthesis) { stop(); status('這個瀏覽器不支援裝置語音，請改用自然語音。'); return; }
       const utterance = new SpeechSynthesisUtterance(text);
@@ -134,7 +134,7 @@ window.InklingVoice = (() => {
       preparations.set(id, pending);
       try {
         getWorker().postMessage({ type: 'prepare', id, texts: texts.filter(Boolean), voice: settings.voice,
-          speed: ['0.85', '1', '1.15'].includes(String(settings.voiceSpeed)) ? Number(settings.voiceSpeed) : 1 });
+          speed: ['0.5', '0.85', '1', '1.15'].includes(String(settings.voiceSpeed)) ? Number(settings.voiceSpeed) : 1 });
       } catch { clearTimeout(pending.timer); preparations.delete(id); resolve(false); }
     });
   }

@@ -62,7 +62,7 @@ icons/                 App 圖示
 - **資料只存在單一裝置**：換手機要靠匯出／匯入。之後可以加帳號與雲端同步。
 - **隱私**：Gemini 免費方案的內容可能被 Google 用來改善模型，正式上線建議改用付費方案並在隱私權政策中說明。
 - **自然朗讀**使用 Kokoro-82M（kokoro-js 1.2.1，Apache-2.0），提供 Heart 女聲與 Michael 男聲。首次使用需連線下載約 100 MB 模型及執行檔，之後盡可能使用瀏覽器快取；離線殼層不代表自然語音必定能離線啟動。低記憶體裝置可在設定改用裝置語音。
-- Kokoro 在 Web Worker 以 WASM 執行，文字不會送往語音伺服器；模型與程式從 Hugging Face、jsDelivr 載入。長文分段播放，可隨時停止。設定提供試聽及 0.85×／1×／1.15× 語速。
+- Kokoro 在 Web Worker 以 WASM 執行，文字不會送往語音伺服器；模型與程式從 Hugging Face、jsDelivr 載入。長文分段播放，可隨時停止。設定提供試聽及 0.5×／0.85×／1×／1.15× 語速。
 - Service worker 更新只清除 Inkling 的舊版快取，保留 Transformers 模型快取。
 
 ## v0.2.1 語音預載與音訊快取
