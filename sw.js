@@ -1,6 +1,6 @@
 /* Inkling service worker：離線開啟 app 殼層
    改了任何檔案要上線時，把 VERSION 加一，使用者下次開啟就會拿到新版 */
-const VERSION = 'inkling-v0.3.0';
+const VERSION = 'inkling-v0.3.1';
 const SHELL = [
   './',
   './index.html',

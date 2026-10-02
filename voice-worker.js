@@ -46,9 +46,11 @@ function chunks(text) {
 const voiceId = voice => ['af_heart', 'af_bella', 'af_nicole', 'am_michael', 'am_fenrir', 'am_puck'].includes(voice) ? voice : 'af_heart';
 let inference = Promise.resolve();
 let prepareEpoch = 0;
-function cachedAudio(part, voice, speed) {
+async function cachedAudio(part, voice, speed) {
+  const cacheKey = VoiceCache.key(part, voice, speed);
+  const hit = await VoiceCache.get(cacheKey);
+  if (hit) return { samples: hit.samples.slice(), sampleRate: hit.sampleRate, cached: true };
   const task = inference.then(async () => {
-    const cacheKey = VoiceCache.key(part, voice, speed);
     const cached = await VoiceCache.get(cacheKey);
     if (cached) return { samples: cached.samples.slice(), sampleRate: cached.sampleRate, cached: true };
     const tts = await model();

@@ -5,7 +5,7 @@
    純前端 PWA：資料存在瀏覽器 localStorage，AI 走 Gemini API
    ========================================================= */
 
-const APP_VERSION = '0.3.0';
+const APP_VERSION = '0.3.1';
 
 const KEYS = {
   entries: 'inkling.entries',
@@ -105,7 +105,6 @@ const state = {
   editingId: null,
   promptOffset: 0,
   busy: false,
-  speechPreparing: '',
   writeError: '',
   autoAdded: null,        // { id, n } 剛批改完自動加入的卡片數
   reviewQueue: null,
@@ -610,7 +609,13 @@ function viewWrite() {
   const editing = state.editingId && state.entries.find((e) => e.id === state.editingId);
   const busy = state.busy;
   let cta = state.editingId ? '重新批改' : '請教練批改';
-  if (busy) cta = `<span class="pencil-loader" aria-hidden="true"></span>${state.speechPreparing || '教練批改中…'}`;
+  if (busy) return `
+    <header class="page-head"><div><p class="en-date">${esc(enDate(today))}</p><h1>稍等一下</h1></div></header>
+    <div class="coach-loading" role="status" aria-live="polite">
+      <div class="coach-logo"><img src="icons/icon.svg" alt="" width="72" height="72"></div>
+      <p>教練正在幫你整理日記<span class="loading-dots" aria-hidden="true"><i></i><i></i><i></i></span></p>
+    </div>
+    <p class="hint">你的草稿已保留。</p>`;
 
   return `
   <header class="page-head">
@@ -1054,7 +1059,6 @@ async function submit() {
     return;
   }
   state.busy = true;
-  state.speechPreparing = '';
   state.writeError = '';
   render();
   try {
@@ -1069,25 +1073,19 @@ async function submit() {
       state.entries.push(entry);
     }
     saveEntries();
-    state.speechPreparing = '批改完成，正在準備朗讀…';
-    render();
-    const ready = await InklingVoice.prepare([
-      entry.result.corrected,
-      ...entry.result.vocab.flatMap(v => [v.term, v.example]),
-      ...entry.result.changes.map(c => c.revised),
-    ], { ...state.settings }, (completed, total) => {
-      state.speechPreparing = `正在準備朗讀 ${completed}／${total}…`;
-      const button = document.querySelector('[data-action="submit"]');
-      if (button) button.textContent = state.speechPreparing;
-    });
-    state.speechPreparing = '';
-    if (!ready) toast('批改已完成；部分語音未準備好，點擊朗讀時會重試。');
+    const voiceSettings = { ...state.settings };
+    await InklingVoice.prepare([entry.result.corrected], voiceSettings);
     state.autoAdded = { id: entry.id, n: autoAddCards(entry) };
     state.draft = '';
     save(KEYS.draft, '');
     state.editingId = null;
     state.busy = false;
     openEntry(entry.id, 'write');
+    // The diary is ready to listen to; prepare supporting content after navigation.
+    void InklingVoice.prepare([
+      ...entry.result.vocab.flatMap(v => [v.term, v.example]),
+      ...entry.result.changes.map(c => c.revised),
+    ], voiceSettings);
     return;
   } catch (err) {
     state.writeError = err.userMessage || `批改失敗：${err.message}`;

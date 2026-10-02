@@ -121,3 +121,16 @@ test('clearing audio cancels unfinished preparation and prevents cache repopulat
   assert.ok(h.messages.some(m=>m.type==='prepare-error'));
   assert.equal(h.messages.filter(m=>m.type==='prepare-ready').length,0);
 });
+
+test('cached diary playback does not wait for unfinished background inference', async () => {
+  let finish;
+  const h = harness(async text => text === 'Slow.' ? new Promise(resolve => { finish = resolve; }) : {audio:new Float32Array(5),sampling_rate:24000});
+  h.send({type:'prepare',id:50,texts:['Hello.'],voice:'af_heart',speed:1});
+  for(let i=0;i<30 && !h.messages.some(m=>m.type==='prepare-ready');i++) await new Promise(r=>setTimeout(r,5));
+  h.send({type:'prepare',id:51,texts:['Slow.'],voice:'af_heart',speed:1}); await tick();
+  assert.ok(finish);
+  h.send({type:'speak',id:1,text:'Hello.',voice:'af_heart',speed:1}); await tick();
+  assert.equal(h.messages.find(m=>m.type==='audio' && m.id===1)?.cached,true);
+  h.send({type:'stop'});
+  finish({audio:new Float32Array(5),sampling_rate:24000}); await tick();
+});

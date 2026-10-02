@@ -710,3 +710,18 @@ textarea.entry[readonly] { opacity: 0.6; }
 .dictation-status { color: var(--ink-2); font-size: var(--fs-sm); }
 .dictation .recording { color: var(--strike); border-color: var(--strike); }
 .dictation textarea { display: block; width: 100%; margin: 8px 0 12px; resize: vertical; }
+
+/* Familiar app mark keeps the whole coaching wait understandable. */
+.coach-loading { min-height: 240px; align-content: center; display: grid; justify-items: center; gap: 12px; padding: 24px 16px; margin: 8px 0 16px; border: 1px solid var(--rule); border-radius: var(--radius-sheet); background: var(--sheet); }
+.coach-logo { position: relative; width: 84px; height: 84px; display: grid; place-items: center; }
+.coach-logo::before { content: ''; position: absolute; inset: -5px; border: 2px solid var(--rule); border-top-color: var(--pencil); border-radius: 50%; animation: logo-orbit 2.4s linear infinite; }
+.coach-logo img { border-radius: 16px; animation: logo-breathe 2.4s ease-in-out infinite; }
+.coach-loading p { margin: 0; color: var(--ink-2); font-size: var(--fs-sm); }
+.loading-dots { display: inline-flex; gap: 3px; margin-left: 6px; vertical-align: middle; }
+.loading-dots i { width: 4px; height: 4px; border-radius: 50%; background: var(--pencil); animation: logo-dot 1.2s ease-in-out infinite; }
+.loading-dots i:nth-child(2) { animation-delay: .2s; }
+.loading-dots i:nth-child(3) { animation-delay: .4s; }
+@keyframes logo-orbit { to { transform: rotate(360deg); } }
+@keyframes logo-breathe { 50% { transform: translateY(-3px) scale(1.04); } }
+@keyframes logo-dot { 0%, 80%, 100% { opacity: .3; } 40% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .coach-logo::before, .coach-logo img, .loading-dots i { animation: none; } }
